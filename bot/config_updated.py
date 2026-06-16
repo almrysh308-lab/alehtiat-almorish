@@ -6,7 +6,7 @@ BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 ADMIN_USER_ID = os.environ.get('ADMIN_USER_ID', '7853478744')
 
 # API Settings - Same Railway website service
-API_BASE_URL = os.environ.get('API_BASE_URL', 'https://seha-project-new-master-production-7198.up.railway.app')
+API_BASE_URL = os.environ.get('API_BASE_URL', 'https://alehtiat-almorish-production.up.railway.app')
 API_ENDPOINT = '/api/bot/add_leave'
 API_FULL_URL = API_BASE_URL + API_ENDPOINT
 BOT_API_KEY = os.environ.get('BOT_API_KEY', 'seha_bot_secret_key_2025')
@@ -30,7 +30,7 @@ HOSPITAL_LOGO = f'{IMAGES_DIR}/شعارالمستشفى.png'
 HEALTH_INFO_CENTER_LOGO = f'{IMAGES_DIR}/شعارالمركزالوطنيللمعلوماتالصحية.jpg'
 
 # QR Code settings
-QR_URL = 'https://seha-project-new-master-production-7198.up.railway.app/inquiry'
+QR_URL = 'https://alehtiat-almorish-production.up.railway.app'
 QR_DISPLAY_URL = 'www.seha.sa/#/inquiries/slenquiry'
 
 # PDF settings
