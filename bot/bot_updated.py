@@ -16,6 +16,25 @@ from api_client import send_leave_data_to_api
 from message_parser import MessageParser
 from date_converter import DateConverter
 
+# ===== صلاحيات المستخدمين =====
+ALLOWED_USERS = [uid.strip() for uid in os.getenv("ALLOWED_USERS", "").split(",") if uid.strip()]
+
+async def is_user_allowed(update: Update) -> bool:
+    """تتحقق من صلاحية المستخدم، وترسل رسالة رفض إذا لم يكن مسموحاً له."""
+    user_id = str(update.effective_user.id)
+    if not ALLOWED_USERS:
+        # إذا كانت القائمة فارغة، نسمح للجميع (يمكنك تغيير هذا السلوك)
+        return True
+    if user_id in ALLOWED_USERS:
+        return True
+    await update.message.reply_text(
+        "⛔ تم رفض الوصول!\n\n"
+        "أنت لست أدمن في هذا البوت.\n"
+        "إذا كنت تعتقد أن هذا خطأ، تواصل مع مالك البوت: @ppppokl"
+    )
+    return False
+# ===== نهاية صلاحيات المستخدمين =====
+
 # إعداد التسجيل
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -59,6 +78,9 @@ date_converter = DateConverter()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج أمر /start"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     
     # رسالة الترحيب المحدثة
@@ -80,8 +102,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 🌍 الجنسية (إنجليزي): Saudi Arabia
 🏢 جهة العمل (عربي): طالب جامعي
 🏢 جهة العمل (إنجليزي): University Student
-👨‍⚕️ اسم الطبيب (عربي): المقبني
-👨‍⚕️ اسم الطبيب (إنجليزي): Almakbany
+👨‍⚕️ اسم الطبيب (عربي): المريش
+👨‍⚕️ اسم الطبيب (إنجليزي): ALMORISH 
 💼 المسمى الوظيفي (عربي): طبيب عام
 💼 المسمى الوظيفي (إنجليزي): General
 📅 تاريخ الدخول (ميلادي): 20-09-2025
@@ -109,6 +131,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def handle_formatted_message(update: Update, context: ContextTypes.DEFAULT_TYPE, parsed_data: dict) -> None:
     """معالجة الرسالة المنسقة وتوليد التقرير"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     
     try:
@@ -220,6 +245,9 @@ async def handle_formatted_message(update: Update, context: ContextTypes.DEFAULT
 
 async def handle_new_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج زر إنشاء تقرير جديد"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     
     if update.message.text == "🆕 إنشاء تقرير جديد":
@@ -236,6 +264,9 @@ async def handle_new_report(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج الرسائل النصية - محدث لدعم الرسائل المنسقة"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     message_text = update.message.text
     
@@ -569,6 +600,9 @@ async def ask_logo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def confirm_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """تأكيد البيانات"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     user_data[user_id]['state'] = STATES['CONFIRM_DATA']
     
@@ -601,6 +635,9 @@ async def confirm_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def generate_pdf_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """توليد تقرير PDF"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     
     try:
@@ -649,10 +686,15 @@ async def generate_pdf_report(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def generate_png_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """توليد تقرير PNG"""
+    if not await is_user_allowed(update):
+        return
     await update.message.reply_text("🚧 ميزة PNG قيد التطوير...")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج الصور المرسلة"""
+    if not await is_user_allowed(update):
+        return
+
     user_id = update.effective_user.id
     
     if user_id in user_data and user_data[user_id]['state'] == STATES['LOGO_UPLOAD']:
