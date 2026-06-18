@@ -172,32 +172,40 @@ class SickLeavePDF(FPDF):
 
     def calculate_duration(self, admission_date_hijri, discharge_date_hijri,
                           admission_date_gregorian, discharge_date_gregorian):
-        """حساب مدة الإجازة - جميع التواريخ بصيغة DD-MM-YYYY"""
+        """حساب مدة الإجازة - جميع التواريخ بصيغة DD-MM-YYYY (مثل 09-02-2026)
+        ملاحظة: نستخدم علامة LRM (U+200E) حول التواريخ لمنع خوارزمية BiDi
+        من عكس اتجاه الأرقام داخل السياق العربي (RTL).
+        """
+        # علامة Left-to-Right Mark لإجبار الأرقام على البقاء بترتيب LTR
+        LRM = '\u200e'
         try:
             admission_parsed = self.parse_date_components(admission_date_gregorian)
             discharge_parsed = self.parse_date_components(discharge_date_gregorian)
             # تطبيع التواريخ الميلادية إلى DD-MM-YYYY مسبقاً
             admission_gregorian_normalized = self.normalize_date_to_ddmmyyyy(admission_date_gregorian)
             discharge_gregorian_normalized = self.normalize_date_to_ddmmyyyy(discharge_date_gregorian)
+            # لف التواريخ بعلامات LRM لإجبارها على البقاء بصيغة DD-MM-YYYY في السياق العربي
+            admission_lrm = f"{LRM}{admission_gregorian_normalized}{LRM}"
+            discharge_lrm = f"{LRM}{discharge_gregorian_normalized}{LRM}"
             if admission_parsed and discharge_parsed:
                 admission_dt = datetime(admission_parsed[2], admission_parsed[1], admission_parsed[0])
                 discharge_dt = datetime(discharge_parsed[2], discharge_parsed[1], discharge_parsed[0])
                 duration_days = (discharge_dt - admission_dt).days + 1
 
-                # صيغة DD-MM-YYYY للمدة العربية
-                duration_ar = f"{duration_days} يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
+                # صيغة DD-MM-YYYY للمدة العربية (مع علامات LRM لمنع العكس)
+                duration_ar = f"{duration_days} يوم  ( {admission_lrm} إلى {discharge_lrm} ) "
 
                 day_word = "day" if duration_days == 1 else "days"
                 # صيغة DD-MM-YYYY للمدة الإنجليزية أيضاً
                 duration_en = f"{duration_days} {day_word}  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
                 return duration_ar, duration_en
             else:
-                duration_ar = f"1 يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
+                duration_ar = f"1 يوم  ( {admission_lrm} إلى {discharge_lrm} ) "
                 duration_en = f"1 day  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
                 return duration_ar, duration_en
         except Exception as e:
             print(f"خطأ في حساب المدة: {e}")
-            duration_ar = f"1 يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
+            duration_ar = f"1 يوم  ( {admission_lrm} إلى {discharge_lrm} ) "
             duration_en = f"1 day  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
             return duration_ar, duration_en
 
@@ -444,9 +452,18 @@ class SickLeavePDF(FPDF):
 
     def render_mixed_font_cell_v2(self, x, y, width, height, text, color):
         """عرض خلية بخطين مع الحفاظ على ترتيب BiDi:
-        الأرقام والأقواس بخط Times، الحروف العربية بخط NotoSansArabic"""
+        الأرقام والأقواس بخط Times، الحروف العربية بخط NotoSansArabic
+        يتجاهل علامات التحكم مثل LRM (U+200E) لأنها غير مرئية ولا تدعمها خط Times"""
         if not text:
             return
+        # إزالة علامات التحكم غير المرئية (LRM, RLM, ZWJ, ZWNJ) لأنها لا تدعمها خط Times
+        # وهي فقط لتوجيه BiDi ولا تظهر بصرياً
+        import unicodedata
+        clean_text = ''.join(
+            char for char in text
+            if unicodedata.category(char) != 'Cf'  # skip Format characters like LRM
+        )
+        text = clean_text
         # حساب العرض الكلي لكل حرف بالخط المناسب
         total_width = 0
         for char in text:

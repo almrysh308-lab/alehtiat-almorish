@@ -12,7 +12,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardR
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from config_updated import BOT_TOKEN, ADMIN_USER_ID, OUTPUT_DIR
 from pdf_generator_updated import generate_sick_leave_pdf
-from api_client import send_leave_data_to_api
+from api_client import send_leave_data_to_api, normalize_date_to_ddmmyyyy
 from message_parser import MessageParser
 from date_converter import DateConverter
 
@@ -143,22 +143,42 @@ async def handle_formatted_message(update: Update, context: ContextTypes.DEFAULT
         # إرسال رسالة تأكيد
         await update.message.reply_text("🔄 جاري معالجة البيانات وتحويل التواريخ...")
         
-        # معالجة التواريخ
-        admission_date = parsed_data.get('admission_date_gregorian', '01-01-2025')
-        discharge_date = parsed_data.get('discharge_date_gregorian', '01-01-2025')
+        # معالجة التواريخ - تطبيع جميع التواريخ إلى صيغة DD-MM-YYYY (مثل 09-02-2026)
+        admission_date = normalize_date_to_ddmmyyyy(parsed_data.get('admission_date_gregorian', '01-01-2025'))
+        discharge_date = normalize_date_to_ddmmyyyy(parsed_data.get('discharge_date_gregorian', '01-01-2025'))
+        issue_date = normalize_date_to_ddmmyyyy(parsed_data.get('issue_date_gregorian', discharge_date))
         
-        # تحويل التواريخ
+        # تطبيع التواريخ الهجرية أيضاً (إذا أُدخلت بصيغة YYYY-MM-DD)
+        admission_hijri = normalize_date_to_ddmmyyyy(parsed_data.get('admission_date_hijri', ''))
+        discharge_hijri = normalize_date_to_ddmmyyyy(parsed_data.get('discharge_date_hijri', ''))
+        
+        # استبدال القيم في parsed_data بالقيم المطّبعة
+        parsed_data['admission_date_gregorian'] = admission_date
+        parsed_data['discharge_date_gregorian'] = discharge_date
+        parsed_data['issue_date_gregorian'] = issue_date
+        if admission_hijri:
+            parsed_data['admission_date_hijri'] = admission_hijri
+        if discharge_hijri:
+            parsed_data['discharge_date_hijri'] = discharge_hijri
+        
+        # تحويل التواريخ (ميلادي → هجري) إذا لم تكن موجودة
         date_data = date_converter.process_dates(admission_date, discharge_date)
+        # نحتفظ بقيمتي الهجري المُطبّعتين من إدخال المستخدم إن وُجدتا
+        if admission_hijri:
+            date_data['admission_date_hijri'] = admission_hijri
+        if discharge_hijri:
+            date_data['discharge_date_hijri'] = discharge_hijri
+        date_data['issue_date_gregorian'] = issue_date
         
         # دمج البيانات
         final_data = {**parsed_data, **date_data}
         
-        # إرسال رسالة تأكيد التحويل
+        # إرسال رسالة تأكيد التحويل (جميع التواريخ بصيغة DD-MM-YYYY)
         await update.message.reply_text(
             f"✅ تم تحويل التواريخ بنجاح:\n"
             f"📅 تاريخ الدخول: {admission_date} ← {date_data['admission_date_hijri']}\n"
             f"📅 تاريخ الخروج: {discharge_date} ← {date_data['discharge_date_hijri']}\n"
-            f"📅 تاريخ إصدار التقرير: {date_data['issue_date_gregorian']}\n\n"
+            f"📅 تاريخ إصدار التقرير: {issue_date}\n\n"
             f"🔄 جاري توليد التقرير..."
         )
         
@@ -355,27 +375,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     elif current_state == STATES['ADMISSION_DATE_GREGORIAN']:
         if message_text != "الخطوة التالية":
-            user_data[user_id]['data']['admission_date_gregorian'] = message_text
+            # تطبيع التاريخ إلى DD-MM-YYYY فوراً (مثل 09-02-2026 بدلاً من 2026-02-09)
+            user_data[user_id]['data']['admission_date_gregorian'] = normalize_date_to_ddmmyyyy(message_text)
         await ask_admission_date_hijri(update, context)
     
     elif current_state == STATES['ADMISSION_DATE_HIJRI']:
         if message_text != "الخطوة التالية":
-            user_data[user_id]['data']['admission_date_hijri'] = message_text
+            user_data[user_id]['data']['admission_date_hijri'] = normalize_date_to_ddmmyyyy(message_text)
         await ask_discharge_date_gregorian(update, context)
     
     elif current_state == STATES['DISCHARGE_DATE_GREGORIAN']:
         if message_text != "الخطوة التالية":
-            user_data[user_id]['data']['discharge_date_gregorian'] = message_text
+            user_data[user_id]['data']['discharge_date_gregorian'] = normalize_date_to_ddmmyyyy(message_text)
         await ask_discharge_date_hijri(update, context)
     
     elif current_state == STATES['DISCHARGE_DATE_HIJRI']:
         if message_text != "الخطوة التالية":
-            user_data[user_id]['data']['discharge_date_hijri'] = message_text
+            user_data[user_id]['data']['discharge_date_hijri'] = normalize_date_to_ddmmyyyy(message_text)
         await ask_issue_date_gregorian(update, context)
     
     elif current_state == STATES['ISSUE_DATE_GREGORIAN']:
         if message_text != "الخطوة التالية":
-            user_data[user_id]['data']['issue_date_gregorian'] = message_text
+            user_data[user_id]['data']['issue_date_gregorian'] = normalize_date_to_ddmmyyyy(message_text)
         await ask_hospital_name_ar(update, context)
     
     elif current_state == STATES['HOSPITAL_NAME_AR']:
@@ -608,7 +629,7 @@ async def confirm_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     data = user_data[user_id]['data']
     
-    # عرض البيانات للمراجعة
+    # عرض البيانات للمراجعة - جميع التواريخ بصيغة DD-MM-YYYY (مثل 09-02-2026)
     review_text = f"""📋 مراجعة البيانات:
 
 👤 اسم المريض: {data.get('patient_name_ar', '')} / {data.get('patient_name_en', '')}
@@ -617,9 +638,9 @@ async def confirm_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 🏢 جهة العمل: {data.get('employer_ar', '')} / {data.get('employer_en', '')}
 👨‍⚕️ اسم الطبيب: {data.get('doctor_name_ar', '')} / {data.get('doctor_name_en', '')}
 💼 المسمى الوظيفي: {data.get('position_ar', '')} / {data.get('position_en', '')}
-📅 تاريخ الدخول: {data.get('admission_date_gregorian', '')} / {data.get('admission_date_hijri', '')}
-📅 تاريخ الخروج: {data.get('discharge_date_gregorian', '')} / {data.get('discharge_date_hijri', '')}
-📅 تاريخ إصدار التقرير: {data.get('issue_date_gregorian', '')}
+📅 تاريخ الدخول: {normalize_date_to_ddmmyyyy(data.get('admission_date_gregorian', ''))} / {normalize_date_to_ddmmyyyy(data.get('admission_date_hijri', ''))}
+📅 تاريخ الخروج: {normalize_date_to_ddmmyyyy(data.get('discharge_date_gregorian', ''))} / {normalize_date_to_ddmmyyyy(data.get('discharge_date_hijri', ''))}
+📅 تاريخ إصدار التقرير: {normalize_date_to_ddmmyyyy(data.get('issue_date_gregorian', ''))}
 🏥 اسم المنشأة: {data.get('hospital_name_ar', '')} / {data.get('hospital_name_en', '')}
 ⏰ الوقت: {data.get('time', '')}
 
