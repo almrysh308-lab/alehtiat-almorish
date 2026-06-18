@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Output
+output/
+*.pdf
+!download/*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

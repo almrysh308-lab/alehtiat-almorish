@@ -76,7 +76,9 @@ def calculate_days(admission_date, discharge_date):
 
 def generate_leave_id(id_number, admission_date, discharge_date):
     """توليد رمز الإجازة مطابق لما يتم في PDF
-    يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان一致性
+    يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان التوافق
+    البادئة الإجبارية: GSL (بصرف النظر عن نوع المنشأة)
+    النظام يدعم توليد أكثر من معرف إجازة فريد - كل سجل جديد يولد GSL مختلف
     """
     try:
         # Normalize dates to DD-MM-YYYY first for consistent digit extraction
@@ -87,10 +89,10 @@ def generate_leave_id(id_number, admission_date, discharge_date):
         admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:]
         discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:]
         leave_number = (discharge_nums + admission_nums + id_part).ljust(11, '0')[:11]
-        return f"PSL{leave_number}"
+        return f"GSL{leave_number}"
     except Exception as e:
         logger.error(f"خطأ في توليد رمز الإجازة: {e}")
-        return f"PSL{id_number[-4:] if len(id_number) >= 4 else id_number}0000000"
+        return f"GSL{id_number[-4:] if len(id_number) >= 4 else id_number}0000000"
 
 def convert_date_format(date_str):
     """تحويل التاريخ من DD-MM-YYYY إلى YYYY-MM-DD لقاعدة البيانات

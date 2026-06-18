@@ -15,7 +15,7 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
-// Helper to format date as YYYY-MM-DD
+// Helper to format date as DD-MM-YYYY (Gregorian, day-first)
 function formatDate(date) {
     if (!date) return '';
     const d = new Date(date);
@@ -23,7 +23,7 @@ function formatDate(date) {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${day}-${month}-${year}`;
 }
 
 // Helper to read the template

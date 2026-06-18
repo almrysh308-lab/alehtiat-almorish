@@ -141,7 +141,10 @@ class SickLeavePDF(FPDF):
             return None
 
     def generate_leave_id(self, id_number, admission_date, discharge_date):
-        """توليد رمز الإجازة - يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان التوافق"""
+        """توليد رمز الإجازة - يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان التوافق
+        البادئة الإجبارية: GSL (بصرف النظر عن نوع المنشأة)
+        النظام يدعم توليد أكثر من معرف إجازة فريد - كل محادثة بوت/كل سجل جديد يولد GSL مختلف
+        """
         # Normalize dates to DD-MM-YYYY first for consistent digit extraction
         admission_normalized = self.normalize_date_to_ddmmyyyy(admission_date)
         discharge_normalized = self.normalize_date_to_ddmmyyyy(discharge_date)
@@ -150,7 +153,7 @@ class SickLeavePDF(FPDF):
         admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:]
         discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:]
         leave_number = (discharge_nums + admission_nums + id_part).ljust(11, '0')[:11]
-        return f"PSL{leave_number}"
+        return f"GSL{leave_number}"
 
     def swap_date_format(self, date_str):
         """تحويل التاريخ من YYYY-MM-DD إلى DD-MM-YYYY والعكس"""
@@ -169,35 +172,33 @@ class SickLeavePDF(FPDF):
 
     def calculate_duration(self, admission_date_hijri, discharge_date_hijri,
                           admission_date_gregorian, discharge_date_gregorian):
-        """حساب مدة الإجازة"""
+        """حساب مدة الإجازة - جميع التواريخ بصيغة DD-MM-YYYY"""
         try:
             admission_parsed = self.parse_date_components(admission_date_gregorian)
             discharge_parsed = self.parse_date_components(discharge_date_gregorian)
+            # تطبيع التواريخ الميلادية إلى DD-MM-YYYY مسبقاً
+            admission_gregorian_normalized = self.normalize_date_to_ddmmyyyy(admission_date_gregorian)
+            discharge_gregorian_normalized = self.normalize_date_to_ddmmyyyy(discharge_date_gregorian)
             if admission_parsed and discharge_parsed:
                 admission_dt = datetime(admission_parsed[2], admission_parsed[1], admission_parsed[0])
                 discharge_dt = datetime(discharge_parsed[2], discharge_parsed[1], discharge_parsed[0])
                 duration_days = (discharge_dt - admission_dt).days + 1
 
-                # تحويل التواريخ الميلادية إلى DD-MM-YYYY لخلية المدة العربية
-                admission_gregorian_formatted = self.swap_date_format(admission_date_gregorian)
-                discharge_gregorian_formatted = self.swap_date_format(discharge_date_gregorian)
-                duration_ar = f"{duration_days} يوم  ( {admission_gregorian_formatted} إلى {discharge_gregorian_formatted} ) "
+                # صيغة DD-MM-YYYY للمدة العربية
+                duration_ar = f"{duration_days} يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
 
                 day_word = "day" if duration_days == 1 else "days"
-                duration_en = f"{duration_days} {day_word}  ( {admission_date_gregorian} to {discharge_date_gregorian} ) "
+                # صيغة DD-MM-YYYY للمدة الإنجليزية أيضاً
+                duration_en = f"{duration_days} {day_word}  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
                 return duration_ar, duration_en
             else:
-                admission_gregorian_formatted = self.swap_date_format(admission_date_gregorian)
-                discharge_gregorian_formatted = self.swap_date_format(discharge_date_gregorian)
-                duration_ar = f"1 يوم  ( {admission_gregorian_formatted} إلى {discharge_gregorian_formatted} ) "
-                duration_en = f"1 day  ( {admission_date_gregorian} to {discharge_date_gregorian} ) "
+                duration_ar = f"1 يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
+                duration_en = f"1 day  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
                 return duration_ar, duration_en
         except Exception as e:
             print(f"خطأ في حساب المدة: {e}")
-            admission_gregorian_formatted = self.swap_date_format(admission_date_gregorian)
-            discharge_gregorian_formatted = self.swap_date_format(discharge_date_gregorian)
-            duration_ar = f"1 يوم  ( {admission_gregorian_formatted} إلى {discharge_gregorian_formatted} ) "
-            duration_en = f"1 day  ( {admission_date_gregorian} to {discharge_date_gregorian} ) "
+            duration_ar = f"1 يوم  ( {admission_gregorian_normalized} إلى {discharge_gregorian_normalized} ) "
+            duration_en = f"1 day  ( {admission_gregorian_normalized} to {discharge_gregorian_normalized} ) "
             return duration_ar, duration_en
 
     def add_table(self, data):
@@ -235,6 +236,29 @@ class SickLeavePDF(FPDF):
             else:
                 processed_data[key] = value
 
+        # ✅ توحيد جميع التواريخ الميلادية إلى صيغة DD-MM-YYYY (إجباري)
+        admission_date_normalized = self.normalize_date_to_ddmmyyyy(
+            data.get('admission_date_gregorian', '01-01-2025')
+        )
+        discharge_date_normalized = self.normalize_date_to_ddmmyyyy(
+            data.get('discharge_date_gregorian', '01-01-2025')
+        )
+        issue_date_normalized = self.normalize_date_to_ddmmyyyy(
+            data.get('issue_date_gregorian', '01-01-2025')
+        )
+
+        # ✅ معالجة جهة العمل الفارغة: مسافة بيضاء بدلاً من "فارغ" أو "-"
+        employer_ar_value = data.get('employer_ar', '')
+        employer_en_value = data.get('employer_en', '')
+        # إذا كانت القيمة فارغة أو تحتوي على كلمات دالة على الفراغ، نعرض مسافة بيضاء
+        empty_indicators = {'', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a'}
+        if not employer_ar_value or employer_ar_value.strip() in empty_indicators:
+            employer_ar_value = ' '  # مسافة بيضاء فارغة
+        else:
+            employer_ar_value = self.process_arabic_text(employer_ar_value)
+        if not employer_en_value or employer_en_value.strip() in empty_indicators:
+            employer_en_value = ' '  # مسافة بيضاء فارغة
+
         # ✅ استخدام safe_arabic_mixed للنصوص المختلطة (المدة، رقم الهوية)
         duration_ar_processed = self.safe_arabic_mixed(duration_ar)
         id_label_processed = self.safe_arabic_mixed('رقم الهوية / الإقامة')
@@ -242,18 +266,18 @@ class SickLeavePDF(FPDF):
         table_data = [
             ['Leave ID', leave_id, '', self.process_arabic_text('رمز الإجازة')],
             ['Leave Duration', duration_en, duration_ar_processed, self.process_arabic_text('مدة الإجازة')],
-            ['Admission Date', processed_data.get('admission_date_gregorian', ''),
-             processed_data.get('admission_date_gregorian', ''), self.process_arabic_text('تاريخ الدخول')],
-            ['Discharge Date', processed_data.get('discharge_date_gregorian', ''),
-             processed_data.get('discharge_date_gregorian', ''), self.process_arabic_text('تاريخ الخروج')],
-            ['Issue Date', processed_data.get('issue_date_gregorian', ''), '',
+            ['Admission Date', admission_date_normalized, admission_date_normalized,
+             self.process_arabic_text('تاريخ الدخول')],
+            ['Discharge Date', discharge_date_normalized, discharge_date_normalized,
+             self.process_arabic_text('تاريخ الخروج')],
+            ['Issue Date', issue_date_normalized, '',
              self.process_arabic_text('تاريخ إصدار التقرير')],
             ['Name', processed_data.get('patient_name_en', '').upper(), processed_data.get('patient_name_ar', ''),
              self.process_arabic_text('الاسم')],
             ['National ID / Iqama', processed_data.get('id_number', ''), '', id_label_processed],
             ['Nationality', processed_data.get('nationality_en', ''), processed_data.get('nationality_ar', ''),
              self.process_arabic_text('الجنسية')],
-            ['Employer', processed_data.get('employer_en', ''), processed_data.get('employer_ar', ''),
+            ['Employer', employer_en_value, employer_ar_value,
              self.process_arabic_text('جهة العمل')],
             ["Practitioner Name", processed_data.get("doctor_name_en", "").upper(),
              processed_data.get("doctor_name_ar", ""), self.process_arabic_text("اسم الممارس")],
@@ -496,7 +520,9 @@ class SickLeavePDF(FPDF):
     def add_footer_elements(self, data):
         """إضافة عناصر التذييل"""
         try:
-            qr_data = f"{data.get('id_number', '')} - {self.generate_leave_id(data.get('id_number', ''), data.get('admission_date_gregorian', ''), data.get('discharge_date_gregorian', ''))} - {data.get('issue_date_gregorian', '')}"
+            # تطبيع تاريخ الإصدار إلى DD-MM-YYYY لبيانات QR
+            issue_date_normalized = self.normalize_date_to_ddmmyyyy(data.get('issue_date_gregorian', ''))
+            qr_data = f"{data.get('id_number', '')} - {self.generate_leave_id(data.get('id_number', ''), data.get('admission_date_gregorian', ''), data.get('discharge_date_gregorian', ''))} - {issue_date_normalized}"
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
             qr.add_data(QR_URL)
             qr.make(fit=True)
@@ -582,7 +608,9 @@ def generate_sick_leave_pdf(data, user_id):
         pdf.add_table(data)
         pdf.add_footer_elements(data)
         id_number = data.get('id_number', 'UNKNOWN')
-        issue_date = data.get('issue_date_gregorian', datetime.now().strftime('%d-%m-%Y'))
+        # تطبيع تاريخ الإصدار إلى DD-MM-YYYY لاستخدامه في اسم الملف/السجلات
+        issue_date_raw = data.get('issue_date_gregorian', datetime.now().strftime('%d-%m-%Y'))
+        issue_date = pdf.normalize_date_to_ddmmyyyy(issue_date_raw) if hasattr(pdf, 'normalize_date_to_ddmmyyyy') else issue_date_raw
         filename = "sickleave.pdf"
         filepath = os.path.join(OUTPUT_DIR, filename)
         pdf.output(filepath)

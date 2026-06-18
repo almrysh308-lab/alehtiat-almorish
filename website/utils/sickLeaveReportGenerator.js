@@ -410,7 +410,14 @@ const generateSickLeaveReport = async (patient, hospital, doctor, res) => {
 
         // REMOVED Relation Row for Sick Leave
 
-        drawRow('Employer', '', 'جهة العمل'); // Employer is often blank/fetched elsewhere? Keeping blank as per image or existing data
+        // ✅ معالجة جهة العمل: إذا كانت فارغة، نطبع مسافة بيضاء بدلاً من "-" أو "فارغ"
+        // patient.employer = Arabic value, patient.employer_en = English value
+        const employerArRaw = (patient.employer !== undefined && patient.employer !== null) ? String(patient.employer) : '';
+        const employerEnRaw = (patient.employer_en !== undefined && patient.employer_en !== null) ? String(patient.employer_en) : '';
+        const emptyIndicators = new Set(['', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined']);
+        const employerAr = emptyIndicators.has(employerArRaw.trim()) ? ' ' : employerArRaw;
+        const employerEn = emptyIndicators.has(employerEnRaw.trim()) ? ' ' : employerEnRaw;
+        drawRow('Employer', { en: employerEn, ar: employerAr }, 'جهة العمل', true, '#f7f7f7');
         drawRow('Practitioner Name', { en: patient.doctor_name_en, ar: patient.doctor_name_ar }, 'اسم الممارس', true, '#f7f7f7');
         drawRow('Position', { en: patient.doctor_specialty_en, ar: patient.doctor_specialty_ar }, 'المسمى الوظيفي', true);
 

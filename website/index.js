@@ -281,21 +281,15 @@ app.post('/manger_data/patients', authenticateToken, async (req, res) => {
         const data = mapping.mapPatientFromAPI(req.body);
         data.user_id = req.user.id; // Enforce owner
 
-        // Auto-Generate GSL/PSL Code
+        // Auto-Generate GSL Code (GSL is now the mandatory prefix for ALL hospital types)
         if (data.hospital_id) {
             try {
                 const [hospitals] = await db.query('SELECT type FROM hospitals WHERE id = ?', [data.hospital_id]);
                 if (hospitals.length > 0) {
                     const hospitalType = hospitals[0].type;
-                    let prefix = 'PSL';
-                    // Determine Prefix
-                    if (hospitalType && (
-                        hospitalType.toLowerCase().includes('government') ||
-                        hospitalType.toLowerCase().includes('ministry') ||
-                        hospitalType.toLowerCase().includes('gsl') // Handle user's GSL type
-                    )) {
-                        prefix = 'GSL';
-                    }
+                    // البادئة الإجبارية: GSL لكافة أنواع المنشآت (حكومية/خاصة/وزارة)
+                    // النظام يدعم أكثر من معرف إجازة فريد - كل سجل جديد يولد GSL مختلف
+                    const prefix = 'GSL';
 
                     // Generate Unique Number (260 + 8 random digits) to make 11 digits total
                     // 260 + 8 digits = 11 digits
