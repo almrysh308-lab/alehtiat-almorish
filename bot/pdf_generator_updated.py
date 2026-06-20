@@ -599,6 +599,34 @@ class SickLeavePDF(FPDF):
             self.set_xy(191, 315)
             self.cell(67, 10, hospital_name_en, align='C')
 
+            # ✅ سطر رقم الترخيص: يُعرض فقط إذا وُجد رقم ترخيص في الاستمارة
+            # إذا لم يوجد، لا يظهر السطر إطلاقاً
+            license_number = data.get('license_number', '')
+            # قائمة القيم الفارغة الدالة على عدم وجود رقم ترخيص
+            empty_indicators = {'', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined'}
+            if license_number and isinstance(license_number, str) and license_number.strip() not in empty_indicators:
+                # تنسيق السطر: "رقم الترخيص : <الرقم>"
+                # النص العربي بخط NotoSansArabic-Bold، الرقم بخط Times-Bold
+                license_label = self.process_arabic_text('رقم الترخيص')
+                license_value = str(license_number).strip()
+                # حساب عرض كل جزء لتوسيطهما معاً
+                self.set_font('NotoSansArabic-Bold', size=12)
+                label_w = self.get_string_width(license_label + ' : ')
+                self.set_font('Times', 'B', size=12)
+                value_w = self.get_string_width(license_value)
+                total_w = label_w + value_w
+                start_x = 191 + (67 - total_w) / 2
+                # رسم الرقم (يسار) بخط Times-Bold
+                self.set_font('Times', 'B', size=12)
+                self.set_text_color(0, 0, 0)
+                self.set_xy(start_x, 325)
+                self.cell(value_w, 10, license_value, align='L')
+                # رسم التسمية (يمين) بخط NotoSansArabic-Bold
+                self.set_font('NotoSansArabic-Bold', size=12)
+                self.set_text_color(0, 0, 0)
+                self.set_xy(start_x + value_w, 325)
+                self.cell(label_w, 10, license_label + ' : ', align='L')
+
             if os.path.exists(HEALTH_INFO_CENTER_LOGO):
                 self.image(HEALTH_INFO_CENTER_LOGO, x=231, y=336, w=54, h=26)
 

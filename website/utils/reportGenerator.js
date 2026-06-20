@@ -306,8 +306,15 @@ const generateCompanionReport = async (patient, hospital, doctor, res) => {
         if (hospital) {
             drawTextAr(hospital.name_ar || '', rightCenterX - 125, footerY + 100, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
             drawTextEn(hospital.name_en || '', rightCenterX - 125, footerY + 120, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
-            const licNum = hospital.license_number || '1410101201200443';
-            drawTextAr(`رقم الترخيص : ${licNum}`, rightCenterX - 125, footerY + 150, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
+
+            // ✅ رقم الترخيص: يُعرض فقط إذا وُجد في بيانات المنشأة. إذا لم يوجد، لا يظهر السطر إطلاقاً.
+            const rawLic = (hospital.license_number !== undefined && hospital.license_number !== null) ? String(hospital.license_number) : '';
+            const emptyIndicators = new Set(['', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined']);
+            const licNum = emptyIndicators.has(rawLic.trim()) ? '' : rawLic.trim();
+
+            if (licNum) {
+                drawTextAr(`رقم الترخيص : ${licNum}`, rightCenterX - 125, footerY + 150, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
+            }
         }
 
 

@@ -149,6 +149,7 @@ def send_leave_data_to_api(user_data):
             'nationalityEn': user_data.get('nationality_en', ''),
             'hospitalName': user_data.get('hospital_name_ar', ''),
             'hospitalNameEn': user_data.get('hospital_name_en', ''),
+            'licenseNumber': user_data.get('license_number', ''),
             'leaveType': 'sick'
         }
         

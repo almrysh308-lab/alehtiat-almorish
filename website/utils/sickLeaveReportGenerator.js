@@ -458,25 +458,31 @@ const generateSickLeaveReport = async (patient, hospital, doctor, res) => {
             // Increased spacing for English Name to avoid overlap
             drawTextEn(hospital.name_en || '', rightCenterX - 125, footerY + 135, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
 
-            const licNum = hospital.license_number;
-            // Determine License Label Width
-            doc.font(fontArBold).fontSize(12);
-            const licLabel = 'رقم الترخيص';
-            const labelW = doc.widthOfString(licLabel);
+            // ✅ رقم الترخيص: يُعرض فقط إذا وُجد في بيانات المنشأة. إذا لم يوجد، لا يظهر السطر إطلاقاً.
+            const rawLic = (hospital.license_number !== undefined && hospital.license_number !== null) ? String(hospital.license_number) : '';
+            const emptyIndicators = new Set(['', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined']);
+            const licNum = emptyIndicators.has(rawLic.trim()) ? '' : rawLic.trim();
 
-            doc.font(fontEnBold).fontSize(12); // Use English font for number
-            const numW = doc.widthOfString(licNum);
+            if (licNum) {
+                // Determine License Label Width
+                doc.font(fontArBold).fontSize(12);
+                const licLabel = 'رقم الترخيص';
+                const labelW = doc.widthOfString(licLabel);
 
-            const gap = 5;
-            const totalW = labelW + gap + numW;
-            const startXLic = rightCenterX - (totalW / 2);
+                doc.font(fontEnBold).fontSize(12); // Use English font for number
+                const numW = doc.widthOfString(licNum);
 
-            // Draw Number (Left) - English Font
-            drawTextEn(licNum, startXLic, footerY + 175, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                const gap = 5;
+                const totalW = labelW + gap + numW;
+                const startXLic = rightCenterX - (totalW / 2);
 
-            // Draw Label (Right) - Arabic Font
-            // Calculate X for label: startX + numW + gap
-            drawTextAr(licLabel, startXLic + numW + gap, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                // Draw Number (Left) - English Font
+                drawTextEn(licNum, startXLic, footerY + 175, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+
+                // Draw Label (Right) - Arabic Font
+                // Calculate X for label: startX + numW + gap
+                drawTextAr(licLabel, startXLic + numW + gap, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+            }
         }
 
 

@@ -63,10 +63,11 @@ STATES = {
     'ISSUE_DATE_GREGORIAN': 16,
     'HOSPITAL_NAME_AR': 17,
     'HOSPITAL_NAME_EN': 18,
-    'TIME': 19,
-    'LOGO_UPLOAD': 20,
-    'CONFIRM_DATA': 21,
-    'GENERATE_REPORT': 22
+    'LICENSE_NUMBER': 19,
+    'TIME': 20,
+    'LOGO_UPLOAD': 21,
+    'CONFIRM_DATA': 22,
+    'GENERATE_REPORT': 23
 }
 
 # تخزين بيانات المستخدمين
@@ -110,6 +111,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 📅 تاريخ الخروج (ميلادي): 21-09-2025
 🏥 اسم المنشأة (عربي): مستشفى الملك فيصل التخصصي
 🏥 اسم المنشأة (إنجليزي): King Faisal Specialist Hospital
+🔢 رقم الترخيص: 1410101201200443
 ⏰ الوقت: 10:20 AM
 
 سيقوم البوت تلقائياً بـ:
@@ -407,6 +409,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif current_state == STATES['HOSPITAL_NAME_EN']:
         if message_text != "الخطوة التالية":
             user_data[user_id]['data']['hospital_name_en'] = message_text
+        await ask_license_number(update, context)
+
+    elif current_state == STATES['LICENSE_NUMBER']:
+        if message_text != "الخطوة التالية":
+            user_data[user_id]['data']['license_number'] = message_text
         await ask_time(update, context)
     
     elif current_state == STATES['TIME']:
@@ -595,6 +602,19 @@ async def ask_hospital_name_en(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await update.message.reply_text(message, reply_markup=reply_markup)
 
+async def ask_license_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """طلب رقم الترخيص (اختياري - إذا لم يُدخل، لن يظهر السطر في التقرير)"""
+    user_id = update.effective_user.id
+    user_data[user_id]['state'] = STATES['LICENSE_NUMBER']
+
+    message = """🔢 يرجى إدخال رقم ترخيص المنشأة (اختياري)
+
+⚠️ ملاحظة: إذا لم يوجد رقم ترخيص، اضغط على "الخطوة التالية" مباشرةً ولن يظهر سطر رقم الترخيص في التقرير."""
+    keyboard = [[KeyboardButton("الخطوة التالية")]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+    await update.message.reply_text(message, reply_markup=reply_markup)
+
 async def ask_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     user_data[user_id]['state'] = STATES['TIME']
@@ -642,6 +662,7 @@ async def confirm_data(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 📅 تاريخ الخروج: {normalize_date_to_ddmmyyyy(data.get('discharge_date_gregorian', ''))} / {normalize_date_to_ddmmyyyy(data.get('discharge_date_hijri', ''))}
 📅 تاريخ إصدار التقرير: {normalize_date_to_ddmmyyyy(data.get('issue_date_gregorian', ''))}
 🏥 اسم المنشأة: {data.get('hospital_name_ar', '')} / {data.get('hospital_name_en', '')}
+🔢 رقم الترخيص: {data.get('license_number', '') or '(غير موجود - لن يظهر السطر)'}
 ⏰ الوقت: {data.get('time', '')}
 
 يرجى اختيار صيغة التقرير:"""
