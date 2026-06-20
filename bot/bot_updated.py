@@ -12,7 +12,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardR
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from config_updated import BOT_TOKEN, ADMIN_USER_ID, OUTPUT_DIR
 from pdf_generator_updated import generate_sick_leave_pdf
-from api_client import send_leave_data_to_api, normalize_date_to_ddmmyyyy
+from api_client import send_leave_data_to_api, normalize_date_to_ddmmyyyy, generate_leave_id
 from message_parser import MessageParser
 from date_converter import DateConverter
 
@@ -184,6 +184,15 @@ async def handle_formatted_message(update: Update, context: ContextTypes.DEFAULT
             f"🔄 جاري توليد التقرير..."
         )
         
+        # ✅ توليد رمز الإجازة مرة واحدة هنا لضمان تطابقه في كل من PDF و API.
+        # كل استدعاء يولّد رمزاً فريداً مختلفاً عن سابقه بفضل العنصر العشوائي + الطابع الزمني،
+        # حتى لو كانت البيانات متطابقة تماماً.
+        final_data['leave_id'] = generate_leave_id(
+            final_data.get('id_number', ''),
+            final_data.get('admission_date_gregorian', ''),
+            final_data.get('discharge_date_gregorian', '')
+        )
+
         # توليد التقرير
         pdf_path = generate_sick_leave_pdf(final_data, str(user_id))
         
@@ -687,6 +696,15 @@ async def generate_pdf_report(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         data = user_data[user_id]['data']
         
+        # ✅ توليد رمز الإجازة مرة واحدة هنا لضمان تطابقه في كل من PDF و API.
+        # كل استدعاء يولّد رمزاً فريداً مختلفاً عن سابقه بفضل العنصر العشوائي + الطابع الزمني،
+        # حتى لو كانت البيانات متطابقة تماماً.
+        data['leave_id'] = generate_leave_id(
+            data.get('id_number', ''),
+            data.get('admission_date_gregorian', ''),
+            data.get('discharge_date_gregorian', '')
+        )
+
         # توليد التقرير
         pdf_path = generate_sick_leave_pdf(data, str(user_id))
         
@@ -759,6 +777,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             data = user_data[user_id]['data']
             data['custom_logo'] = logo_path
             
+            # ✅ الحفاظ على نفس رمز الإجازة إن وُجد من التوليد السابق لهذا المستخدم
+            # (إعادة توليد التقرير بنفس الشعار يجب ألا يغيّر الرمز)،
+            # وإلا نولّد رمزاً جديداً فريداً.
+            if not data.get('leave_id') or not str(data.get('leave_id', '')).strip().startswith('GSL'):
+                data['leave_id'] = generate_leave_id(
+                    data.get('id_number', ''),
+                    data.get('admission_date_gregorian', ''),
+                    data.get('discharge_date_gregorian', '')
+                )
+
             # إنشاء تقرير جديد مع الشعار
             pdf_path = generate_sick_leave_pdf(data, str(user_id))
             

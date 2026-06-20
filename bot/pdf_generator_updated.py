@@ -8,6 +8,8 @@ Enhanced PDF Generator for Seha Sick Leave Reports with Arabic Text Support - Up
 import os
 import re
 import qrcode
+import random
+import time
 from datetime import datetime
 from fpdf import FPDF
 from PIL import Image
@@ -141,19 +143,39 @@ class SickLeavePDF(FPDF):
             return None
 
     def generate_leave_id(self, id_number, admission_date, discharge_date):
-        """توليد رمز الإجازة - يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان التوافق
+        """توليد رمز الإجازة GSL فريد لكل إصدار، حتى لو كانت البيانات متطابقة.
         البادئة الإجبارية: GSL (بصرف النظر عن نوع المنشأة)
-        النظام يدعم توليد أكثر من معرف إجازة فريد - كل محادثة بوت/كل سجل جديد يولد GSL مختلف
+        النظام يدعم توليد أكثر من معرف إجازة فريد - كل محادثة بوت/كل سجل جديد يولد GSL مختلف تماماً.
+
+        الآلية:
+        - تُستخدم آخر 4 أرقام من رقم الهوية + أرقام من تاريخ الدخول + أرقام من تاريخ الخروج كأساس منطقي.
+        - يُضاف جزء عشوائي (4 أرقام) + طابع زمني (آخر 3 أرقام من الملي ثانية) لضمان أن كل رمز
+          جديد يختلف تماماً عن سابقه، حتى لو أُدخلت نفس البيانات بالضبط.
+        - الطول النهائي: 11 رقماً بعد البادئة GSL.
         """
-        # Normalize dates to DD-MM-YYYY first for consistent digit extraction
-        admission_normalized = self.normalize_date_to_ddmmyyyy(admission_date)
-        discharge_normalized = self.normalize_date_to_ddmmyyyy(discharge_date)
-        
-        id_part = id_number[-4:] if len(id_number) >= 4 else id_number
-        admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:]
-        discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:]
-        leave_number = (discharge_nums + admission_nums + id_part).ljust(11, '0')[:11]
-        return f"GSL{leave_number}"
+        try:
+            # Normalize dates to DD-MM-YYYY first for consistent digit extraction
+            admission_normalized = self.normalize_date_to_ddmmyyyy(admission_date)
+            discharge_normalized = self.normalize_date_to_ddmmyyyy(discharge_date)
+
+            id_part = id_number[-4:] if len(id_number) >= 4 else (id_number or '0000')
+            admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:].ljust(3, '0')
+            discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:].ljust(4, '0')
+
+            # ✅ جزء عشوائي + طابع زمني لضمان التفرّد التام لكل إصدار
+            random_part = f"{random.randint(1000, 9999)}"
+            time_part = f"{int(time.time() * 1000) % 1000:03d}"
+            unique_part = random_part + time_part  # 4 + 3 = 7 أرقام
+
+            base = (discharge_nums + admission_nums + id_part)[:11].ljust(11, '0')
+            # استبدال آخر 7 أرقام بجزء التفرّد لضمان اختلاف الرمز لكل إصدار
+            leave_number = (base[:4] + unique_part)[:11].ljust(11, '0')
+            return f"GSL{leave_number}"
+        except Exception as e:
+            print(f"خطأ في توليد رمز الإجازة: {e}")
+            # حتى في حالة الخطأ، نُولّد رمزاً عشوائياً فريداً
+            random_part = f"{random.randint(10000000, 99999999)}"
+            return f"GSL260{random_part}"
 
     def swap_date_format(self, date_str):
         """تحويل التاريخ من YYYY-MM-DD إلى DD-MM-YYYY والعكس"""
@@ -223,11 +245,20 @@ class SickLeavePDF(FPDF):
             9: (247, 247, 247),
         }
 
-        leave_id = self.generate_leave_id(
-            data.get('id_number', '1234567890'),
-            data.get('admission_date_gregorian', '01-01-2025'),
-            data.get('discharge_date_gregorian', '01-01-2025')
-        )
+        # ✅ توليد رمز الإجازة: نستخدم الرمز المُمرّر من data إن وُجد (مما يضمن التطابق
+        # مع الرمز المُرسل إلى API)، وإلا نولّد رمزاً جديداً فريداً هنا.
+        # كل استدعاء يولّد رمزاً مختلفاً عن سابقه بفضل العنصر العشوائي + الطابع الزمني.
+        leave_id = data.get('leave_id')
+        if not leave_id or not str(leave_id).strip().startswith('GSL'):
+            leave_id = self.generate_leave_id(
+                data.get('id_number', '1234567890'),
+                data.get('admission_date_gregorian', '01-01-2025'),
+                data.get('discharge_date_gregorian', '01-01-2025')
+            )
+            # تخزينه في data حتى يستخدمه QR code لاحقاً (ضمان تطابق الجدول و QR)
+            data['leave_id'] = leave_id
+        else:
+            leave_id = str(leave_id).strip()
 
         duration_ar, duration_en = self.calculate_duration(
             data.get('admission_date_hijri', '01-01-1446'),
@@ -539,7 +570,18 @@ class SickLeavePDF(FPDF):
         try:
             # تطبيع تاريخ الإصدار إلى DD-MM-YYYY لبيانات QR
             issue_date_normalized = self.normalize_date_to_ddmmyyyy(data.get('issue_date_gregorian', ''))
-            qr_data = f"{data.get('id_number', '')} - {self.generate_leave_id(data.get('id_number', ''), data.get('admission_date_gregorian', ''), data.get('discharge_date_gregorian', ''))} - {issue_date_normalized}"
+            # ✅ إعادة استخدام نفس leave_id المُولّد سابقاً (إن وُجد) لضمان تطابق
+            # الرمز المعروض في الجدول مع الرمز المُضمّن في بيانات QR.
+            # إذا لم يكن موجوداً لأي سبب، نولّد رمزاً جديداً فريداً.
+            leave_id_for_qr = data.get('leave_id')
+            if not leave_id_for_qr or not str(leave_id_for_qr).strip().startswith('GSL'):
+                leave_id_for_qr = self.generate_leave_id(
+                    data.get('id_number', ''),
+                    data.get('admission_date_gregorian', ''),
+                    data.get('discharge_date_gregorian', '')
+                )
+                data['leave_id'] = leave_id_for_qr
+            qr_data = f"{data.get('id_number', '')} - {leave_id_for_qr} - {issue_date_normalized}"
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
             qr.add_data(QR_URL)
             qr.make(fit=True)

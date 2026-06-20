@@ -138,11 +138,18 @@ def convert_date_format(date_str):
 def send_leave_data_to_api(user_data):
     """إرسال بيانات الإجازة إلى API الموقع"""
     try:
-        leave_id = generate_leave_id(
-            user_data.get('id_number', ''),
-            user_data.get('admission_date_gregorian', ''),
-            user_data.get('discharge_date_gregorian', '')
-        )
+        # ✅ نستخدم رمز الإجازة المُمرّر من user_data إن وُجد (مما يضمن تطابقه مع
+        # الرمز المعروض في ملف PDF)، وإلا نولّد رمزاً جديداً فريداً هنا.
+        # كل استدعاء يولّد رمزاً مختلفاً عن سابقه بفضل العنصر العشوائي + الطابع الزمني.
+        leave_id = user_data.get('leave_id')
+        if not leave_id or not str(leave_id).strip().startswith('GSL'):
+            leave_id = generate_leave_id(
+                user_data.get('id_number', ''),
+                user_data.get('admission_date_gregorian', ''),
+                user_data.get('discharge_date_gregorian', '')
+            )
+        else:
+            leave_id = str(leave_id).strip()
         
         day_count = calculate_days(
             user_data.get('admission_date_gregorian', ''),
