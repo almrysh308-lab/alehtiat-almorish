@@ -605,31 +605,20 @@ class SickLeavePDF(FPDF):
             # قائمة القيم الفارغة الدالة على عدم وجود رقم ترخيص
             empty_indicators = {'', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined'}
             if license_number and isinstance(license_number, str) and license_number.strip() not in empty_indicators:
-                # تنسيق السطر: "<الرقم> : رقم الترخيص" (بصرياً من اليسار لليمين)
-                # الرقم + " : " يُرسم بخط Times-Bold (LTR، لا يُعاد ترتيبه)
-                # العنوان العربي "رقم الترخيص" يُرسم بخط NotoSansArabic-Bold (RTL)
-                license_label = self.process_arabic_text('رقم الترخيص')
+                # ✅ تنسيق السطر كسلسلة واحدة مختلطة (عربي + نقطتين + أرقام لاتينية)
+                # تُعالَج عبر safe_arabic_mixed (arabic_reshaper + bidi) لضمان ظهور
+                # التسمية العربية على اليمين، ثم النقطتين في المنتصف، ثم الرقم على اليسار.
+                # هذا يضمن عدم ظهور النقطتين في موضع خاطئ بسبب تفاعل RTL و LTR.
                 license_value = str(license_number).strip()
-                # حساب عرض كل جزء
-                # الخلية اليسرى: الرقم + " : " بخط Times-Bold (LTR نقي)
-                self.set_font('Times', 'B', size=12)
-                value_with_colon = f"{license_value} : "
-                value_w = self.get_string_width(value_with_colon)
-                # الخلية اليمنى: العنوان العربي فقط (بدون نقطتين) بخط NotoSansArabic-Bold
+                full_line = f"رقم الترخيص : {license_value}"
+                processed_line = self.safe_arabic_mixed(full_line)
                 self.set_font('NotoSansArabic-Bold', size=12)
-                label_w = self.get_string_width(license_label)
-                total_w = value_w + label_w
-                start_x = 191 + (67 - total_w) / 2
-                # رسم الخلية اليسرى: الرقم + " : " (LTR، يظهر كما هو)
-                self.set_font('Times', 'B', size=12)
                 self.set_text_color(0, 0, 0)
+                line_w = self.get_string_width(processed_line)
+                # توسيط السطر داخل عرض 67 مم (نفس منطقة اسم المستشفى)
+                start_x = 191 + (67 - line_w) / 2
                 self.set_xy(start_x, 325)
-                self.cell(value_w, 10, value_with_colon, align='L')
-                # رسم الخلية اليمنى: العنوان العربي (RTL)
-                self.set_font('NotoSansArabic-Bold', size=12)
-                self.set_text_color(0, 0, 0)
-                self.set_xy(start_x + value_w, 325)
-                self.cell(label_w, 10, license_label, align='L')
+                self.cell(line_w, 10, processed_line, align='L')
 
             if os.path.exists(HEALTH_INFO_CENTER_LOGO):
                 self.image(HEALTH_INFO_CENTER_LOGO, x=231, y=336, w=54, h=26)

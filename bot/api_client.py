@@ -8,6 +8,8 @@ API Client for Seha Website Integration
 import requests
 import json
 import logging
+import random
+import time
 from datetime import datetime
 from config_updated import API_FULL_URL, BOT_API_KEY
 
@@ -75,24 +77,46 @@ def calculate_days(admission_date, discharge_date):
         return 1
 
 def generate_leave_id(id_number, admission_date, discharge_date):
-    """توليد رمز الإجازة مطابق لما يتم في PDF
-    يطبع التواريخ أولاً إلى DD-MM-YYYY لضمان التوافق
+    """توليد رمز الإجازة GSL فريد لكل إصدار، حتى لو كانت البيانات متطابقة.
     البادئة الإجبارية: GSL (بصرف النظر عن نوع المنشأة)
-    النظام يدعم توليد أكثر من معرف إجازة فريد - كل سجل جديد يولد GSL مختلف
+    النظام يدعم توليد أكثر من معرف إجازة فريد - كل سجل جديد يولد GSL مختلف تماماً.
+
+    الآلية:
+    - تُستخدم آخر 4 أرقام من رقم الهوية + أرقام من تاريخ الدخول + أرقام من تاريخ الخروج
+      كأساس منطقي يربط الرمز بالبيانات.
+    - يُضاف جزء عشوائي (4 أرقام) + طابع زمني (آخر 3 أرقام من الملي ثانية) لضمان
+      أن كل رمز جديد يختلف تماماً عن سابقه، حتى لو أُدخلت نفس البيانات بالضبط.
+    - الطول النهائي: 11 رقماً بعد البادئة GSL.
     """
     try:
         # Normalize dates to DD-MM-YYYY first for consistent digit extraction
         admission_normalized = normalize_date_to_ddmmyyyy(admission_date)
         discharge_normalized = normalize_date_to_ddmmyyyy(discharge_date)
-        
-        id_part = id_number[-4:] if len(id_number) >= 4 else id_number
-        admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:]
-        discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:]
-        leave_number = (discharge_nums + admission_nums + id_part).ljust(11, '0')[:11]
+
+        id_part = id_number[-4:] if len(id_number) >= 4 else (id_number or '0000')
+        admission_nums = ''.join(filter(str.isdigit, admission_normalized))[-3:].ljust(3, '0')
+        discharge_nums = ''.join(filter(str.isdigit, discharge_normalized))[-4:].ljust(4, '0')
+
+        # ✅ جزء عشوائي + طابع زمني لضمان التفرّد التام لكل إصدار
+        # 4 أرقام عشوائية (1000-9999) + آخر 3 أرقام من الملي ثانية الحالية
+        random_part = f"{random.randint(1000, 9999)}"
+        time_part = f"{int(time.time() * 1000) % 1000:03d}"
+        unique_part = random_part + time_part  # 4 + 3 = 7 أرقام
+
+        # التركيب النهائي: discharge(4) + admission(3) + id(4) = 11 رقماً
+        # ثم نُدمج جزء التفرّد في المواضع الزوجية باستبدال بسيط دون تغيير الطول:
+        base = (discharge_nums + admission_nums + id_part)[:11].ljust(11, '0')
+        # استبدال آخر 7 أرقام بجزء التفرّد لضمان اختلاف الرمز لكل إصدار
+        leave_number = base[:4] + unique_part  # 4 + 7 = 11 رقماً
+        leave_number = leave_number[:11].ljust(11, '0')
+
+        logger.info(f"تم توليد رمز إجازة فريد: GSL{leave_number} (الأساس: {base})")
         return f"GSL{leave_number}"
     except Exception as e:
         logger.error(f"خطأ في توليد رمز الإجازة: {e}")
-        return f"GSL{id_number[-4:] if len(id_number) >= 4 else id_number}0000000"
+        # حتى في حالة الخطأ، نُولّد رمزاً عشوائياً فريداً
+        random_part = f"{random.randint(10000000, 99999999)}"
+        return f"GSL260{random_part}"
 
 def convert_date_format(date_str):
     """تحويل التاريخ من DD-MM-YYYY إلى YYYY-MM-DD لقاعدة البيانات

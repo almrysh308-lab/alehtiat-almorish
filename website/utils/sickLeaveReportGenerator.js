@@ -464,27 +464,17 @@ const generateSickLeaveReport = async (patient, hospital, doctor, res) => {
             const licNum = emptyIndicators.has(rawLic.trim()) ? '' : rawLic.trim();
 
             if (licNum) {
-                // ✅ تنسيق السطر: "<الرقم> : رقم الترخيص" (بصرياً من اليسار لليمين)
-                // الرقم + " : " يُرسم بخط Times-Bold (LTR، يظهر كما هو)
-                // العنوان العربي "رقم الترخيص" يُرسم بخط NotoSansArabic-Bold (RTL)
-                const licLabel = 'رقم الترخيص';
-                // Number + " : " (LTR، يُحسب عرضه بخط Times-Bold)
-                const valueWithColon = `${licNum} : `;
+                // ✅ تنسيق السطر كسلسلة واحدة مختلطة (عربي + نقطتين + أرقام لاتينية)
+                // تُرسَم بخط Arabic-Bold عبر drawTextAr الذي يعالج تشكيل الأحرف العربية
+                // وترتيبها البصري الصحيح (RTL) مع الحفاظ على الأرقام اللاتينية (LTR).
+                // هذا يضمن ظهور النقطتين في موضعها الصحيح بين التسمية والرقم.
+                const fullLine = `رقم الترخيص : ${licNum}`;
 
                 doc.font(fontArBold).fontSize(12);
-                const labelW = doc.widthOfString(licLabel);
+                const lineW = doc.widthOfString(fullLine);
+                const startXLic = rightCenterX - (lineW / 2);
 
-                doc.font(fontEnBold).fontSize(12);
-                const numW = doc.widthOfString(valueWithColon);
-
-                const totalW = labelW + numW;
-                const startXLic = rightCenterX - (totalW / 2);
-
-                // Draw Number + " : " (Left) - English Font (LTR، لا يُعاد ترتيبه)
-                drawTextEn(valueWithColon, startXLic, footerY + 175, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
-
-                // Draw Label (Right) - Arabic Font
-                drawTextAr(licLabel, startXLic + numW, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                drawTextAr(fullLine, startXLic, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
             }
         }
 
