@@ -605,27 +605,31 @@ class SickLeavePDF(FPDF):
             # قائمة القيم الفارغة الدالة على عدم وجود رقم ترخيص
             empty_indicators = {'', 'غير محدد', 'فارغ', '-', 'None', 'none', 'null', 'NULL', 'Not Specified', 'N/A', 'n/a', 'undefined'}
             if license_number and isinstance(license_number, str) and license_number.strip() not in empty_indicators:
-                # تنسيق السطر: "رقم الترخيص : <الرقم>"
-                # النص العربي بخط NotoSansArabic-Bold، الرقم بخط Times-Bold
+                # تنسيق السطر: "<الرقم> : رقم الترخيص" (بصرياً من اليسار لليمين)
+                # الرقم + " : " يُرسم بخط Times-Bold (LTR، لا يُعاد ترتيبه)
+                # العنوان العربي "رقم الترخيص" يُرسم بخط NotoSansArabic-Bold (RTL)
                 license_label = self.process_arabic_text('رقم الترخيص')
                 license_value = str(license_number).strip()
-                # حساب عرض كل جزء لتوسيطهما معاً
-                self.set_font('NotoSansArabic-Bold', size=12)
-                label_w = self.get_string_width(license_label + ' : ')
+                # حساب عرض كل جزء
+                # الخلية اليسرى: الرقم + " : " بخط Times-Bold (LTR نقي)
                 self.set_font('Times', 'B', size=12)
-                value_w = self.get_string_width(license_value)
-                total_w = label_w + value_w
+                value_with_colon = f"{license_value} : "
+                value_w = self.get_string_width(value_with_colon)
+                # الخلية اليمنى: العنوان العربي فقط (بدون نقطتين) بخط NotoSansArabic-Bold
+                self.set_font('NotoSansArabic-Bold', size=12)
+                label_w = self.get_string_width(license_label)
+                total_w = value_w + label_w
                 start_x = 191 + (67 - total_w) / 2
-                # رسم الرقم (يسار) بخط Times-Bold
+                # رسم الخلية اليسرى: الرقم + " : " (LTR، يظهر كما هو)
                 self.set_font('Times', 'B', size=12)
                 self.set_text_color(0, 0, 0)
                 self.set_xy(start_x, 325)
-                self.cell(value_w, 10, license_value, align='L')
-                # رسم التسمية (يمين) بخط NotoSansArabic-Bold
+                self.cell(value_w, 10, value_with_colon, align='L')
+                # رسم الخلية اليمنى: العنوان العربي (RTL)
                 self.set_font('NotoSansArabic-Bold', size=12)
                 self.set_text_color(0, 0, 0)
                 self.set_xy(start_x + value_w, 325)
-                self.cell(label_w, 10, license_label + ' : ', align='L')
+                self.cell(label_w, 10, license_label, align='L')
 
             if os.path.exists(HEALTH_INFO_CENTER_LOGO):
                 self.image(HEALTH_INFO_CENTER_LOGO, x=231, y=336, w=54, h=26)

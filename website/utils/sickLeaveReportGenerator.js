@@ -464,24 +464,27 @@ const generateSickLeaveReport = async (patient, hospital, doctor, res) => {
             const licNum = emptyIndicators.has(rawLic.trim()) ? '' : rawLic.trim();
 
             if (licNum) {
-                // Determine License Label Width
-                doc.font(fontArBold).fontSize(12);
+                // ✅ تنسيق السطر: "<الرقم> : رقم الترخيص" (بصرياً من اليسار لليمين)
+                // الرقم + " : " يُرسم بخط Times-Bold (LTR، يظهر كما هو)
+                // العنوان العربي "رقم الترخيص" يُرسم بخط NotoSansArabic-Bold (RTL)
                 const licLabel = 'رقم الترخيص';
+                // Number + " : " (LTR، يُحسب عرضه بخط Times-Bold)
+                const valueWithColon = `${licNum} : `;
+
+                doc.font(fontArBold).fontSize(12);
                 const labelW = doc.widthOfString(licLabel);
 
-                doc.font(fontEnBold).fontSize(12); // Use English font for number
-                const numW = doc.widthOfString(licNum);
+                doc.font(fontEnBold).fontSize(12);
+                const numW = doc.widthOfString(valueWithColon);
 
-                const gap = 5;
-                const totalW = labelW + gap + numW;
+                const totalW = labelW + numW;
                 const startXLic = rightCenterX - (totalW / 2);
 
-                // Draw Number (Left) - English Font
-                drawTextEn(licNum, startXLic, footerY + 175, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                // Draw Number + " : " (Left) - English Font (LTR، لا يُعاد ترتيبه)
+                drawTextEn(valueWithColon, startXLic, footerY + 175, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
 
                 // Draw Label (Right) - Arabic Font
-                // Calculate X for label: startX + numW + gap
-                drawTextAr(licLabel, startXLic + numW + gap, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                drawTextAr(licLabel, startXLic + numW, footerY + 165, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
             }
         }
 

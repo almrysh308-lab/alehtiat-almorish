@@ -313,7 +313,23 @@ const generateCompanionReport = async (patient, hospital, doctor, res) => {
             const licNum = emptyIndicators.has(rawLic.trim()) ? '' : rawLic.trim();
 
             if (licNum) {
-                drawTextAr(`رقم الترخيص : ${licNum}`, rightCenterX - 125, footerY + 150, { width: 250, align: 'center', weight: 'bold', fontSize: 12, color: '#000000' });
+                // ✅ تنسيق السطر: "<الرقم> : رقم الترخيص" (بصرياً من اليسار لليمين)
+                // الرقم + " : " يُرسم بخط Times-Bold (LTR، يظهر كما هو)
+                // العنوان العربي "رقم الترخيص" يُرسم بخط NotoSansArabic-Bold (RTL)
+                const licLabel = 'رقم الترخيص';
+                const valueWithColon = `${licNum} : `;
+
+                doc.font(fontArBold).fontSize(12);
+                const labelW = doc.widthOfString(licLabel);
+
+                doc.font(fontEnBold).fontSize(12);
+                const numW = doc.widthOfString(valueWithColon);
+
+                const totalW = labelW + numW;
+                const startXLic = rightCenterX - (totalW / 2);
+
+                drawTextEn(valueWithColon, startXLic, footerY + 150, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
+                drawTextAr(licLabel, startXLic + numW, footerY + 150, { align: 'left', weight: 'bold', fontSize: 12, color: '#000000' });
             }
         }
 
